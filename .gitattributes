@@ -1,1 +1,19 @@
 * text=auto eol=lf
+
+# Keep the Composer archive to what a consumer needs: no tests, no CI, no
+# tooling. Everything below stays in the repository and out of the dist.
+/.github            export-ignore
+/tests              export-ignore
+/.gitattributes     export-ignore
+/.gitignore         export-ignore
+/.editorconfig      export-ignore
+/phpunit.xml        export-ignore
+/phpunit.xml.dist   export-ignore
+/phpstan.neon       export-ignore
+/phpstan.neon.dist  export-ignore
+/pint.json          export-ignore
+/.php-cs-fixer.php  export-ignore
+/.php-cs-fixer.dist.php export-ignore
+/CHANGELOG.md       export-ignore
+/CONTRIBUTING.md    export-ignore
+/docs               export-ignore
