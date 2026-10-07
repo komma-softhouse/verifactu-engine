@@ -11,6 +11,7 @@ use Komma\Verifactu\Models\Records\ForeignFiscalIdentifier;
 use Komma\Verifactu\Models\Records\ForeignIdType;
 use Komma\Verifactu\Models\Records\InvoiceIdentifier;
 use Komma\Verifactu\Models\Records\InvoiceType;
+use Komma\Verifactu\Models\Records\IssuedBy;
 use Komma\Verifactu\Models\Records\OperationType;
 use Komma\Verifactu\Models\Records\Record;
 use Komma\Verifactu\Models\Records\RegimeType;
@@ -408,6 +409,54 @@ final class RegistrationRecordTest extends TestCase {
         $record->invoiceType = InvoiceType::Sustitutiva;
         $record->hash = $record->calculateHash();
         $record->validate();
+    }
+
+    public function testValidatesIssuedBy(): void {
+        $record = Record::fromXml(TestUtils::getXmlFile(__DIR__ . '/registration-record-f1.xml'));
+        $this->assertInstanceOf(RegistrationRecord::class, $record);
+
+        $record->issuedBy = IssuedBy::ThirdParty;
+        try {
+            $record->validate();
+            $this->fail('An invoice issued by a third party without the third party must not validate');
+        } catch (InvalidModelException $e) {
+            $this->assertStringContainsString('requires the third party', $e->getMessage());
+        }
+
+        $record->thirdParty = new FiscalIdentifier('Gestoría Rías SL', 'B70000021');
+        $record->validate();
+
+        $record->issuedBy = IssuedBy::Recipient;
+        try {
+            $record->validate();
+            $this->fail('A self-billed invoice must not carry a third party');
+        } catch (InvalidModelException $e) {
+            $this->assertStringContainsString('Only an invoice issued by a third party', $e->getMessage());
+        }
+
+        $record->thirdParty = null;
+        $record->validate();
+        $this->assertSame(IssuedBy::Recipient, $record->issuedBy);
+    }
+
+    public function testExportsAndImportsIssuedByRecipient(): void {
+        $modelXml = TestUtils::getXmlFile(__DIR__ . '/registration-record-f1.xml');
+        $record = Record::fromXml($modelXml);
+        $this->assertInstanceOf(RegistrationRecord::class, $record);
+        $record->issuedBy = IssuedBy::Recipient;
+
+        $computerSystemXml = $modelXml->get('sum1:SistemaInformatico');
+        $this->assertNotNull($computerSystemXml);
+        $exportedXml = UXML::newInstance('container', null, ['xmlns:sum1' => Record::NS]);
+        $record->export($exportedXml, ComputerSystem::fromXml($computerSystemXml));
+
+        $xml = $exportedXml->get('sum1:RegistroAlta')?->asXML() ?? '';
+        $this->assertStringContainsString('<sum1:EmitidaPorTerceroODestinatario>D</sum1:EmitidaPorTerceroODestinatario>', $xml);
+        $this->assertLessThan(strpos($xml, '<sum1:Destinatarios>'), strpos($xml, '<sum1:EmitidaPorTerceroODestinatario>'));
+
+        $reimported = Record::fromXml($exportedXml->get('sum1:RegistroAlta'));
+        $this->assertInstanceOf(RegistrationRecord::class, $reimported);
+        $this->assertSame(IssuedBy::Recipient, $reimported->issuedBy);
     }
 
     #[DataProvider('xmlPathsProvider')]
