@@ -1,6 +1,6 @@
 # Verifactu-PHP
 [![CI](https://github.com/komma-softhouse/Verifactu-PHP/workflows/CI/badge.svg)](https://github.com/komma-softhouse/Verifactu-PHP/actions)
-[![Última versión estable](https://img.shields.io/packagist/v/komma-softhouse/verifactu-php)](https://packagist.org/packages/komma-softhouse/verifactu-php)
+[![Última versión estable](https://img.shields.io/packagist/v/komma-softhouse/verifactu-php)]((https://packagist.org/packages/komma-softhouse/verifactu-engine))
 [![Versión de PHP](https://img.shields.io/badge/php-%3E%3D8.2-8892BF)](composer.json)
 [![Documentación](https://img.shields.io/badge/online-docs-blueviolet)](https://komma-softhouse.github.io/Verifactu-PHP/)
 
