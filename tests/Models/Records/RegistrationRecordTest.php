@@ -195,6 +195,54 @@ final class RegistrationRecordTest extends TestCase {
         }
     }
 
+    public function testSkipsTotalAmountCheckForSpecialRegimes(): void {
+        $record = new RegistrationRecord();
+        $record->invoiceId = new InvoiceIdentifier();
+        $record->invoiceId->issuerId = 'A00000000';
+        $record->invoiceId->invoiceNumber = 'REBU-1';
+        $record->invoiceId->issueDate = new DateTimeImmutable('2025-06-01');
+        $record->issuerName = 'Perico de los Palotes, S.A.';
+        $record->invoiceType = InvoiceType::Simplificada;
+        $record->description = 'Venta de terminal usado en REBU';
+        $record->breakdown[0] = new BreakdownDetails();
+        $record->breakdown[0]->taxType = TaxType::IVA;
+        $record->breakdown[0]->regimeType = RegimeType::C03;
+        $record->breakdown[0]->operationType = OperationType::Subject;
+        $record->breakdown[0]->baseAmount = '82.64';
+        $record->breakdown[0]->taxRate = '21.00';
+        $record->breakdown[0]->taxAmount = '17.36';
+        $record->totalTaxAmount = '17.36';
+        $record->totalAmount = '300.00';
+        $record->previousInvoiceId = null;
+        $record->previousHash = null;
+        $record->hashedAt = new DateTimeImmutable('2025-06-01T20:30:40+02:00');
+        $record->hash = $record->calculateHash();
+
+        // The price is the full sale price, not base plus quota of the margin
+        $record->validate();
+
+        // The quota is still checked
+        $record->totalTaxAmount = '18.00';
+        $record->hash = $record->calculateHash();
+        try {
+            $record->validate();
+            $this->fail('Did not throw exception for total tax amount validation');
+        } catch (InvalidModelException $e) {
+            $this->assertStringContainsString('Expected total tax amount of 17.36, got 18.00', $e->getMessage());
+        }
+
+        // A general line keeps the check
+        $record->totalTaxAmount = '17.36';
+        $record->breakdown[0]->regimeType = RegimeType::C01;
+        $record->hash = $record->calculateHash();
+        try {
+            $record->validate();
+            $this->fail('Did not throw exception for total amount validation');
+        } catch (InvalidModelException $e) {
+            $this->assertStringContainsString('Expected total amount of 100.00, got 300.00', $e->getMessage());
+        }
+    }
+
     public function testValidatesRecipients(): void {
         $record = new RegistrationRecord();
         $record->invoiceId = new InvoiceIdentifier();

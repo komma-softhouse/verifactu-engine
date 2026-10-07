@@ -13,6 +13,14 @@ use UXML\UXML;
  * @field RegistroAlta
  */
 class RegistrationRecord extends Record {
+    private const REGIMES_WITHOUT_TOTAL_CHECK = [
+        RegimeType::C03,
+        RegimeType::C05,
+        RegimeType::C06,
+        RegimeType::C08,
+        RegimeType::C09,
+    ];
+
     /**
      * Indicador de subsanación de un registro de facturación de alta previamente generado
      *
@@ -208,6 +216,10 @@ class RegistrationRecord extends Record {
                 ->addViolation();
         }
 
+        if ($this->hasRegimeWithoutTotalCheck()) {
+            return;
+        }
+
         $isValidTotalAmount = false;
         $bestTotalAmount = number_format($expectedTotalBaseAmount + $expectedTotalTaxAmount, 2, '.', '');
         foreach ([0, -0.01, 0.01, -0.02, 0.02] as $tolerance) {
@@ -222,6 +234,22 @@ class RegistrationRecord extends Record {
                 ->atPath('totalAmount')
                 ->addViolation();
         }
+    }
+
+    /**
+     * AEAT does not cross-check ImporteTotal against the breakdown when any
+     * line is under these keys: the total legitimately differs from base plus
+     * quota (the margin schemes tax only the margin, travel agencies and
+     * VAT groups declare amounts that are not the invoiced price).
+     * Source: AEAT "Validaciones y errores" for VERI*FACTU, ImporteTotal.
+     */
+    private function hasRegimeWithoutTotalCheck(): bool {
+        foreach ($this->breakdown as $details) {
+            if (isset($details->regimeType) && in_array($details->regimeType, self::REGIMES_WITHOUT_TOTAL_CHECK, true)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     #[Assert\Callback]
