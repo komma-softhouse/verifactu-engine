@@ -91,6 +91,21 @@ class RegistrationRecord extends Record {
     public array $recipients = [];
 
     /**
+     * Factura emitida por un tercero o por el destinatario (autofacturación)
+     *
+     * @field EmitidaPorTerceroODestinatario
+     */
+    public ?IssuedBy $issuedBy = null;
+
+    /**
+     * Tercero que expide la factura en nombre del obligado
+     *
+     * @field Tercero
+     */
+    #[Assert\Valid]
+    public ?FiscalIdentifier $thirdParty = null;
+
+    /**
      * Tipo de factura rectificativa
      *
      * @field TipoRectificativa
@@ -250,6 +265,25 @@ class RegistrationRecord extends Record {
             }
         }
         return false;
+    }
+
+    #[Assert\Callback]
+    final public function validateIssuedBy(ExecutionContextInterface $context): void {
+        if ($this->issuedBy === IssuedBy::ThirdParty && $this->thirdParty === null) {
+            $context->buildViolation('An invoice issued by a third party requires the third party')
+                ->atPath('thirdParty')
+                ->addViolation();
+        }
+        if ($this->issuedBy !== IssuedBy::ThirdParty && $this->thirdParty !== null) {
+            $context->buildViolation('Only an invoice issued by a third party can carry the third party')
+                ->atPath('thirdParty')
+                ->addViolation();
+        }
+        if ($this->issuedBy === IssuedBy::Recipient && count($this->recipients) === 0) {
+            $context->buildViolation('A self-billed invoice requires its recipient, who issues it')
+                ->atPath('recipients')
+                ->addViolation();
+        }
     }
 
     #[Assert\Callback]
@@ -418,6 +452,19 @@ class RegistrationRecord extends Record {
         }
         $this->description = $description;
 
+        // Issued by a third party or by the recipient
+        $rawIssuedBy = $recordElement->get('sum1:EmitidaPorTerceroODestinatario')?->asText();
+        if ($rawIssuedBy !== null) {
+            $this->issuedBy = IssuedBy::tryFrom($rawIssuedBy) ?? throw new ImportException('Invalid <sum1:EmitidaPorTerceroODestinatario /> value');
+        }
+        $terceroElement = $recordElement->get('sum1:Tercero');
+        if ($terceroElement !== null) {
+            $this->thirdParty = new FiscalIdentifier(
+                $terceroElement->get('sum1:NombreRazon')?->asText() ?? throw new ImportException('Missing <sum1:NombreRazon /> from <sum1:Tercero /> element'),
+                $terceroElement->get('sum1:NIF')?->asText() ?? throw new ImportException('Missing <sum1:NIF /> from <sum1:Tercero /> element'),
+            );
+        }
+
         // Recipients
         foreach ($recordElement->getAll('sum1:Destinatarios/sum1:IDDestinatario') as $destinatarioElement) {
             $recipientName = $destinatarioElement->get('sum1:NombreRazon')?->asText();
@@ -525,6 +572,16 @@ class RegistrationRecord extends Record {
 
         // Description
         $recordElement->add('sum1:DescripcionOperacion', $this->description);
+
+        // Issued by a third party or by the recipient
+        if ($this->issuedBy !== null) {
+            $recordElement->add('sum1:EmitidaPorTerceroODestinatario', $this->issuedBy->value);
+        }
+        if ($this->thirdParty !== null) {
+            $terceroElement = $recordElement->add('sum1:Tercero');
+            $terceroElement->add('sum1:NombreRazon', $this->thirdParty->name);
+            $terceroElement->add('sum1:NIF', $this->thirdParty->nif);
+        }
 
         // Recipients
         if (count($this->recipients) > 0) {
